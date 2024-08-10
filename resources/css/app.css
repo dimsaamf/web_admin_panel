@@ -1,0 +1,85 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f7f9fc;
+    direction: rtl;
+}
+
+.container {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    direction: rtl;
+}
+
+h2 {
+    color: #333;
+    font-weight: bold;
+    margin-bottom: 20px;
+    text-align: right;
+}
+
+.form-row {
+    display: flex;
+    align-items: center;
+    direction: rtl;
+}
+
+.form-row .col-auto {
+    margin-left: 10px;
+}
+
+.form-row label {
+    font-weight: bold;
+    color: #555;
+    text-align: right;
+}
+
+.table {
+    margin-top: 20px;
+    border-radius: 8px;
+    overflow: hidden;
+    direction: rtl;
+}
+
+.table thead {
+    background-color: #007bff;
+    color: white;
+}
+
+.table th, .table td {
+    padding: 15px;
+    text-align: right;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.table th {
+    font-weight: 600;
+}
+
+.table tbody tr:last-child {
+    font-weight: bold;
+    background-color: #f1f3f5;
+}
+
+.btn-success, .btn-info {
+    font-size: 14px;
+    padding: 10px 20px;
+    margin-left: 10px;
+}
+
+.btn-primary {
+    font-size: 18px;
+    padding: 8px 12px;
+}
+
+.btn-primary i, .btn-success i, .btn-info i {
+    margin-left: 5px;
+}
+
+.text-danger {
+    font-size: 12px;
+    color: #dc3545;
+    margin-top: 10px;
+    text-align: right;
+}
