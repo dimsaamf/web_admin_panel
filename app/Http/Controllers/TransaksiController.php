@@ -20,7 +20,7 @@ class TransaksiController extends Controller
             return DataTables::of($transaksi)
                 ->addIndexColumn()
                 ->addColumn('customer', function ($row) {
-                    return $row->customer->nama;
+                    return $row->customer->name;
                 })
                 ->addColumn('action', function ($row) {
                     $btn = '<a href="#" class="edit btn btn-sm btn-warning">Edit</a>';
@@ -37,69 +37,79 @@ class TransaksiController extends Controller
     public function create()
     {
         $customers = MsCustomer::all();
-
-        // Generate a transaction number for display without incrementing the counter
         $transactionNumber = $this->generateTransactionNumber();
 
-        return view('transaksi.create', compact('customers', 'transactionNumber'));
+        $response = Http::withHeaders([
+            'Client-Service' => 'gmedia-recruitment',
+            'Auth-Key' => 'demo-admin',
+            'User-Id' => '1',
+            'Token' => '8godoajVqNNOFz21npycK6iofUgFXl1kluEJt/WYFts9C8IZqUOf7rOXCe0m4f9B',
+        ])->post('http://gmedia.bz/DemoCase/main/list_barang', [
+            'start' => 0,
+            'count' => 10,
+        ]);
+
+        $data = $response->json()['response'];
+
+        return view('transaksi.create', compact('customers', 'transactionNumber', 'data'));
     }
 
     public function store(Request $request)
-{
-    // Validation
-    $request->validate([
-        'customer_id' => 'required_without:new_customer_name',
-        'new_customer_name' => 'required_if:customer_id,new',
-        'new_customer_address' => 'required_if:customer_id,new',
-        'new_customer_phone' => 'required_if:customer_id,new',
-        'transaction_date' => 'required|date',
-        'items' => 'required|array|min:1',
-        'items.*.id' => 'required|integer',
-        'items.*.quantity' => 'required|integer|min:1',
-    ]);
-
-    // If a new customer is being added
-    if ($request->customer_id === 'new') {
-        $customer = MsCustomer::create([
-            'name' => $request->new_customer_name,
-            'address' => $request->new_customer_address,
-            'phone' => $request->new_customer_phone,
+    {
+        // Validation
+        $validated = $request->validate([
+            'transaction_date' => 'required|date',
+            'customer_id' => 'required_without:new_customer_name|exists:ms_customer,id',
+            'new_customer_name' => 'required_if:customer_id,new',
+            'new_customer_address' => 'required_if:customer_id,new',
+            'new_customer_phone' => 'required_if:customer_id,new',
+            'items' => 'required|array',
+            'items.*.kd_barang' => 'required|exists:products,kd_barang',
+            'items.*.qty' => 'required|integer|min:1',
+            'items.*.subtotal' => 'required|numeric|min:0'
         ]);
-        $customerId = $customer->id;
-    } else {
-        $customerId = $request->customer_id;
+
+        // Handle new customer if selected
+        $customerId = $request->input('customer_id');
+        if ($customerId === 'new') {
+            $customer = new MsCustomer();
+            $customer->nama = $request->input('new_customer_name');
+            $customer->alamat = $request->input('new_customer_address');
+            $customer->phone = $request->input('new_customer_phone');
+            $customer->save();
+            $customerId = $customer->id;
+        }
+
+        // Generate the transaction number (with counter increment)
+        $transactionNumber = $this->generateTransactionNumber(true);
+
+        // Create transaction header
+        $transaksiH = new TransaksiH();
+        $transaksiH->nomor_transaksi = $transactionNumber;
+        $transaksiH->id_customer = $customerId;
+        $transaksiH->tanggal_transaksi = $request->input('transaction_date');
+        $transaksiH->total_transaksi = array_sum(array_column($request->input('items'), 'subtotal')); // Calculate total from subtotals
+        $transaksiH->save();
+
+        // Add transaction details
+        foreach ($request->input('items') as $item) {
+            $transaksiD = new TransaksiD();
+            $transaksiD->id_transaksi_h = $transaksiH->id;
+            $transaksiD->kd_barang = $item['kd_barang'];
+            $transaksiD->qty = $item['qty'];
+            $transaksiD->subtotal = $item['subtotal'];
+            $transaksiD->save();
+        }
+
+        // Increment the counter
+        $this->incrementCounter();
+
+        // Redirect or respond
+        return redirect()->route('transaksi.index')->with('success', 'Transaction successfully created!');
     }
-
-    // Generate the transaction number (with counter increment)
-    $transactionNumber = $this->generateTransactionNumber(true);
-
-    // Create the transaction header
-    $transaction = new TransaksiH();
-    $transaction->nomor_transaksi = $transactionNumber;
-    $transaction->id_customer = $customerId;
-    $transaction->tanggal_transaksi = $request->transaction_date;
-    $transaction->total_transaksi = array_sum(array_column($request->items, 'subtotal')); // Calculate total from subtotals
-    $transaction->save();
-
-    // Store transaction details
-    foreach ($request->items as $item) {
-        TransaksiD::create([
-            'id_transaksi_h' => $transaction->id,
-            'kd_barang' => $item['id'],
-            'nama_barang' => $item['name'], // Ensure 'name' is included in the request
-            'qty' => $item['quantity'],
-            'subtotal' => $item['subtotal'], // Save user-input subtotal
-        ]);
-    }
-    $this->incrementCounter();
-
-    return redirect()->route('transaksi.index')->with('success', 'Transaction saved successfully.');
-}
-
 
     protected function generateTransactionNumber($incrementCounter = false)
     {
-        // Fetch the current year and month
         $year = date('Y');
         $month = date('m');
 
@@ -148,17 +158,19 @@ class TransaksiController extends Controller
         return $response->json()['response'];
     }
 
-    public function getProductDetails($id)
+    public function getProductDetails(Request $request)
     {
+        $kd_barang = $request->query('kd_barang');
+
         $response = Http::withHeaders([
             'Client-Service' => 'gmedia-recruitment',
             'Auth-Key' => 'demo-admin',
             'User-Id' => '1',
             'Token' => '8godoajVqNNOFz21npycK6iofUgFXl1kluEJt/WYFts9C8IZqUOf7rOXCe0m4f9B',
         ])->post('http://gmedia.bz/DemoCase/main/get_barang', [
-            'kd_barang' => $id,
+            'kd_barang' => $kd_barang,
         ]);
 
-        return $response->json();
+        return response()->json($response->json());
     }
 }
